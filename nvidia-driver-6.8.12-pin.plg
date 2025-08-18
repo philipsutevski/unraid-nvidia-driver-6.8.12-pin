@@ -22,8 +22,6 @@ fi
 TAG_OVERRIDE="6.8.12-Unraid"
 # Use repo that hosts the desired 6.8.12 assets
 REPO_TARGET="ich777/unraid-nvidia-driver"
-REPO_ALT1="unraid/unraid-nvidia-driver"
-REPO_ALT2="ich777/unraid-nvidia-driver"
 DRIVER_PIN="470.239.06"
 
 for f in \
@@ -31,9 +29,9 @@ for f in \
   "$EMHTTP_DIR/include/download.sh" \
   "$EMHTTP_DIR/include/exec.sh"; do
   if [ -f "$f" ]; then
-    # point API/DL URLs to target repo regardless of current value
-    sed -i "s|$REPO_ALT1|$REPO_TARGET|g" "$f" 2>/dev/null || true
-    sed -i "s|$REPO_ALT2|$REPO_TARGET|g" "$f" 2>/dev/null || true
+    # point API/DL URLs to target repo regardless of current value (do not touch raw.githubusercontent.com)
+    sed -i -E 's|api.github.com/repos/(unraid|ich777)/unraid-nvidia-driver|api.github.com/repos/ich777/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
+    sed -i -E 's|github.com/(unraid|ich777)/unraid-nvidia-driver/releases|github.com/ich777/unraid-nvidia-driver/releases|g' "$f" 2>/dev/null || true
     # force tag override
     sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
     sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
@@ -57,16 +55,19 @@ PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
 EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
 TAG_OVERRIDE="6.8.12-Unraid"
 REPO_TARGET="ich777/unraid-nvidia-driver"
-REPO_ALT1="unraid/unraid-nvidia-driver"
-REPO_ALT2="ich777/unraid-nvidia-driver"
 DRIVER_PIN="470.239.06"
+start_ts=$(date +%s)
+# Wait until plugin files exist (up to 180s)
+while [ ! -f "$EMHTTP_DIR/include/exec.sh" ] && [ $(( $(date +%s) - start_ts )) -lt 180 ]; do
+  sleep 2
+done
 for f in \
   "$EMHTTP_DIR/include/update-check.sh" \
   "$EMHTTP_DIR/include/download.sh" \
   "$EMHTTP_DIR/include/exec.sh"; do
   [ -f "$f" ] || continue
-  sed -i "s|$REPO_ALT1|$REPO_TARGET|g" "$f" 2>/dev/null || true
-  sed -i "s|$REPO_ALT2|$REPO_TARGET|g" "$f" 2>/dev/null || true
+  sed -i -E 's|api.github.com/repos/(unraid|ich777)/unraid-nvidia-driver|api.github.com/repos/ich777/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
+  sed -i -E 's|github.com/(unraid|ich777)/unraid-nvidia-driver/releases|github.com/ich777/unraid-nvidia-driver/releases|g' "$f" 2>/dev/null || true
   sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
   sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
 done
