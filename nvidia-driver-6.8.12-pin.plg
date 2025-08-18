@@ -56,11 +56,15 @@ EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
 TAG_OVERRIDE="6.8.12-Unraid"
 REPO_TARGET="ich777/unraid-nvidia-driver"
 DRIVER_PIN="470.239.06"
-start_ts=$(date +%s)
-# Wait until plugin files exist (up to 180s)
-while [ ! -f "$EMHTTP_DIR/include/exec.sh" ] && [ $(( $(date +%s) - start_ts )) -lt 180 ]; do
-  sleep 2
-done
+
+# Ensure official plugin is installed; if not, install once and exit (will be rescheduled)
+if [ ! -f "$EMHTTP_DIR/include/exec.sh" ]; then
+  if command -v installplg >/dev/null 2>&1 ; then
+    installplg "https://raw.githubusercontent.com/unraid/unraid-nvidia-driver/master/nvidia-driver.plg" || true
+  fi
+  exit 0
+fi
+
 for f in \
   "$EMHTTP_DIR/include/update-check.sh" \
   "$EMHTTP_DIR/include/download.sh" \
@@ -94,13 +98,16 @@ chmod +x "$PIN_SCRIPT"
 GO_FILE="/boot/config/go"
 if [ -f "$GO_FILE" ]; then
   if ! grep -q "/boot/config/plugins/nvidia-driver/pin-on-boot.sh" "$GO_FILE" ; then
-    echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh" >> "$GO_FILE"
+    echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh | at now + 1 minute >/dev/null 2>&1" >> "$GO_FILE"
   fi
 else
   echo "#!/bin/bash" > "$GO_FILE"
-  echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh" >> "$GO_FILE"
+  echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh | at now + 1 minute >/dev/null 2>&1" >> "$GO_FILE"
   chmod +x "$GO_FILE"
 fi
+
+# Also schedule a one-time run this boot without waiting for next reboot
+echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh" | at now + 1 minute >/dev/null 2>&1 || true
 ]]></INLINE>
 </FILE>
 
