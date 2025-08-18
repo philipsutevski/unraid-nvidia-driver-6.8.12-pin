@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PLUGIN name="nvidia-driver-pin" author="helper" version="2024.01.19" launch="Settings/nvidia-driver" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
+
+<CHANGES>Companion plugin: persists Nvidia repo/tag and driver_version pin at boot without modifying the official plugin during install.</CHANGES>
+
+<FILE Run="/bin/bash">
+<INLINE><![CDATA[
+set -e
+
+PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
+EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
+PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
+TAG_OVERRIDE="6.8.12-Unraid"
+REPO_TARGET="ich777/unraid-nvidia-driver"
+DRIVER_PIN="470.239.06"
+
+mkdir -p "$PLUGIN_DIR" "$PACKAGES_DIR"
+
+PIN_SCRIPT="$PLUGIN_DIR/pin-on-boot.sh"
+cat > "$PIN_SCRIPT" <<'EOS'
+#!/bin/bash
+PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
+EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
+TAG_OVERRIDE="6.8.12-Unraid"
+REPO_TARGET="ich777/unraid-nvidia-driver"
+DRIVER_PIN="470.239.06"
+
+# Exit silently if official plugin is not installed yet
+[ -f "$EMHTTP_DIR/include/exec.sh" ] || exit 0
+
+for f in \
+  "$EMHTTP_DIR/include/update-check.sh" \
+  "$EMHTTP_DIR/include/download.sh" \
+  "$EMHTTP_DIR/include/exec.sh"; do
+  [ -f "$f" ] || continue
+  sed -i -E 's|api.github.com/repos/(unraid|ich777)/unraid-nvidia-driver|api.github.com/repos/ich777/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
+  sed -i -E 's|github.com/(unraid|ich777)/unraid-nvidia-driver/releases|github.com/ich777/unraid-nvidia-driver/releases|g' "$f" 2>/dev/null || true
+  sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
+  sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
+done
+
+mkdir -p "$PLUGIN_DIR"
+if [ ! -f "$PLUGIN_DIR/settings.cfg" ]; then
+  cat > "$PLUGIN_DIR/settings.cfg" <<CFG
+first_installation=true
+driver_version=latest
+disable_xconfig=false
+update_check=false
+CFG
+fi
+sed -i "/driver_version=/c\\driver_version=${DRIVER_PIN}" "$PLUGIN_DIR/settings.cfg"
+sed -i "/update_check=/c\\update_check=false" "$PLUGIN_DIR/settings.cfg"
+
+rm -f /tmp/nvidia_driver /tmp/nvos_driver /tmp/nvidia_branches
+"$EMHTTP_DIR/include/exec.sh" update >/dev/null 2>&1 || true
+EOS
+chmod +x "$PIN_SCRIPT"
+
+# Add to go file without running immediately to avoid early emhttp/plugin conflicts
+GO_FILE="/boot/config/go"
+if [ -f "$GO_FILE" ]; then
+  if ! grep -q "/boot/config/plugins/nvidia-driver/pin-on-boot.sh" "$GO_FILE" ; then
+    echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh" >> "$GO_FILE"
+  fi
+else
+  echo "#!/bin/bash" > "$GO_FILE"
+  echo "/bin/bash /boot/config/plugins/nvidia-driver/pin-on-boot.sh" >> "$GO_FILE"
+  chmod +x "$GO_FILE"
+fi
+]]></INLINE>
+</FILE>
+
+</PLUGIN>
