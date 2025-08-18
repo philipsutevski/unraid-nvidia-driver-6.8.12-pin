@@ -24,6 +24,7 @@ EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
 TAG_OVERRIDE="6.8.12-Unraid"
 REPO_TARGET="ich777/unraid-nvidia-driver"
 DRIVER_PIN="470.239.06"
+PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
 
 # Exit silently if official plugin is not installed yet
 [ -f "$EMHTTP_DIR/include/exec.sh" ] || exit 0
@@ -53,6 +54,27 @@ sed -i "/update_check=/c\\update_check=false" "$PLUGIN_DIR/settings.cfg"
 
 rm -f /tmp/nvidia_driver /tmp/nvos_driver /tmp/nvidia_branches
 "$EMHTTP_DIR/include/exec.sh" update >/dev/null 2>&1 || true
+
+# Ensure the pinned driver package is downloaded
+if ! ls -1 "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}/" 2>/dev/null | grep -q "^nvidia-${DRIVER_PIN}-${TAG_OVERRIDE}-" ; then
+  # settings.cfg already set to DRIVER_PIN by this plugin; download.sh will fetch the exact package
+  "$EMHTTP_DIR/include/download.sh" >/dev/null 2>&1 || true
+fi
+
+# If installed driver differs, install the pinned one now
+INSTALLED_V=$(modinfo nvidia 2>/dev/null | awk '/^version:/{print $2}')
+if [ -n "$INSTALLED_V" ] && [ "$INSTALLED_V" != "$DRIVER_PIN" ]; then
+  PKG_FILE=$(ls -1 "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}/" 2>/dev/null | grep "^nvidia-${DRIVER_PIN}-${TAG_OVERRIDE}-" | head -n1)
+  if [ -n "$PKG_FILE" ] && [ -f "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}/$PKG_FILE" ]; then
+    modprobe -r nvidia_drm nvidia_modeset nvidia 2>/dev/null || true
+    /sbin/installpkg "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}/$PKG_FILE" >/dev/null 2>&1 || true
+    depmod -a >/dev/null 2>&1 || true
+    modprobe nvidia 2>/dev/null || true
+    logger -t nvidia-driver-pin "Installed Nvidia driver $DRIVER_PIN from $PKG_FILE"
+  else
+    logger -t nvidia-driver-pin "Pinned package for $DRIVER_PIN not found after download attempt"
+  fi
+fi
 EOS
 chmod +x "$PIN_SCRIPT"
 
