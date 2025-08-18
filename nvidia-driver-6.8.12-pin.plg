@@ -9,7 +9,7 @@
   <!ENTITY packages  "/boot/config/plugins/&name;/packages">
 ]>
 
-<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
+<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
 
 <CHANGES>
 Pinned variant: installs the official Unraid Nvidia plugin and forces it to use the 6.8.12-Unraid release tag (and official repo) when listing/downloading drivers.
