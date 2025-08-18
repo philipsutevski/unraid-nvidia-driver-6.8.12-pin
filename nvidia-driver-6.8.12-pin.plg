@@ -1,61 +1,48 @@
-<?xml version='1.0' standalone='yes'?>
-<!DOCTYPE PLUGIN [
-  <!ENTITY name      "nvidia-driver">
-  <!ENTITY author    "unraid">
-  <!ENTITY version   "2024.01.19">
-  <!ENTITY launch    "Settings/nvidia-driver">
-  <!ENTITY plugin    "/boot/config/plugins/&name;">
-  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
-  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
-]>
+<?xml version="1.0" encoding="utf-8"?>
+<PLUGIN name="nvidia-driver-6.8.12-pin" author="unraid" version="2024.01.19" launch="Settings/nvidia-driver" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
 
-<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
-
-<CHANGES>
-Pinned variant: installs the official Unraid Nvidia plugin and forces it to use the 6.8.12-Unraid release tag (and official repo) when listing/downloading drivers.
-</CHANGES>
+<CHANGES>Pinned variant: installs the official Unraid Nvidia plugin and forces it to use the 6.8.12-Unraid release tag (and official repo) when listing/downloading drivers.</CHANGES>
 
 <FILE Run="/bin/bash">
 <INLINE>
 set -e
-# Ensure plugin dirs exist
-mkdir -p &plugin; &packages;
 
-# Install official Unraid Nvidia Driver plugin (from official repository)
+PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
+EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
+PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
+
+mkdir -p "$PLUGIN_DIR" "$PACKAGES_DIR"
+
 if command -v installplg >/dev/null 2>&1 ; then
   installplg "https://raw.githubusercontent.com/unraid/unraid-nvidia-driver/master/nvidia-driver.plg"
 else
   echo "installplg not found; cannot install official plugin automatically" >&2
 fi
 
-# Patch installed scripts to use the official repo and kernel tag 6.8.12-Unraid for queries/downloads
 TAG_OVERRIDE="6.8.12-Unraid"
 REPO_OLD="ich777/unraid-nvidia-driver"
 REPO_NEW="unraid/unraid-nvidia-driver"
 
 for f in \
-  "/usr/local/emhttp/plugins/nvidia-driver/include/update-check.sh" \
-  "/usr/local/emhttp/plugins/nvidia-driver/include/download.sh" \
-  "/usr/local/emhttp/plugins/nvidia-driver/include/exec.sh"; do
+  "$EMHTTP_DIR/include/update-check.sh" \
+  "$EMHTTP_DIR/include/download.sh" \
+  "$EMHTTP_DIR/include/exec.sh"; do
   if [ -f "$f" ]; then
-    # point API/DL URLs to official repo
     sed -i "s|$REPO_OLD|$REPO_NEW|g" "$f" 2>/dev/null || true
-    # force tag override
     sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
     sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
   fi
 done
 
-# Initialize settings if missing
-if [ ! -f "&plugin;/settings.cfg" ]; then
+if [ ! -f "$PLUGIN_DIR/settings.cfg" ]; then
   echo 'first_installation=true
 driver_version=latest
 disable_xconfig=false
-update_check=false' > "&plugin;/settings.cfg"
+update_check=false' > "$PLUGIN_DIR/settings.cfg"
 fi
-# Create packages subdir for the tag
-mkdir -p "&packages;/${TAG_OVERRIDE%%-*}"
+
+mkdir -p "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}"
 </INLINE>
 </FILE>
 
-</PLUGIN> 
+</PLUGIN>
