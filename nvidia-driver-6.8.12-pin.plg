@@ -4,7 +4,7 @@
 <CHANGES>Pinned variant: installs the official Unraid Nvidia plugin and forces it to use the 6.8.12-Unraid release tag (and official repo) when listing/downloading drivers.</CHANGES>
 
 <FILE Run="/bin/bash">
-<INLINE>
+<INLINE><![CDATA[
 set -e
 
 PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
@@ -13,10 +13,10 @@ PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
 
 mkdir -p "$PLUGIN_DIR" "$PACKAGES_DIR"
 
-if command -v installplg >/dev/null 2>&amp;1 ; then
+if command -v installplg >/dev/null 2>&1 ; then
   installplg "https://raw.githubusercontent.com/unraid/unraid-nvidia-driver/master/nvidia-driver.plg"
 else
-  echo "installplg not found; cannot install official plugin automatically" >&amp;2
+  echo "installplg not found; cannot install official plugin automatically" >&2
 fi
 
 TAG_OVERRIDE="6.8.12-Unraid"
@@ -42,7 +42,7 @@ update_check=false' > "$PLUGIN_DIR/settings.cfg"
 fi
 
 mkdir -p "$PACKAGES_DIR/${TAG_OVERRIDE%%-*}"
-</INLINE>
+]]></INLINE>
 </FILE>
 
 </PLUGIN>
