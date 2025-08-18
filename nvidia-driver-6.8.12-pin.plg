@@ -1,0 +1,54 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "nvidia-driver">
+  <!ENTITY author    "ich777">
+  <!ENTITY version   "2024.01.19">
+  <!ENTITY launch    "Settings/nvidia-driver">
+  <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;/raw/master">
+  <!ENTITY pluginURL "&gitURL;/&name;.plg">
+  <!ENTITY md5       "fe753e0f0a799903bc01b899688f72da">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
+]>
+
+<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
+
+<CHANGES>
+Pinned variant: forces the plugin to use the 6.8.12-Unraid release tag when listing/downloading drivers by patching installed scripts.
+</CHANGES>
+
+<FILE Name="/boot/config/plugins/&name;/&name;-&version;.txz" Run="upgradepkg --install-new">
+<URL>&gitURL;/packages/&name;-&version;.txz</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+set -e
+# Ensure plugin dirs exist
+mkdir -p &plugin; &packages;
+# Patch installed scripts to use kernel tag 6.8.12-Unraid for queries/downloads
+TAG_OVERRIDE="6.8.12-Unraid"
+for f in \
+  "/usr/local/emhttp/plugins/nvidia-driver/include/update-check.sh" \
+  "/usr/local/emhttp/plugins/nvidia-driver/include/download.sh" \
+  "/usr/local/emhttp/plugins/nvidia-driver/include/exec.sh"; do
+  if [ -f "$f" ]; then
+    sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
+    sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
+  fi
+done
+# Initialize settings if missing
+if [ ! -f "&plugin;/settings.cfg" ]; then
+  echo 'first_installation=true
+driver_version=latest
+disable_xconfig=false
+update_check=false' > "&plugin;/settings.cfg"
+fi
+# Create packages subdir for the tag
+mkdir -p "&packages;/${TAG_OVERRIDE%%-*}"
+</INLINE>
+</FILE>
+
+</PLUGIN> 
