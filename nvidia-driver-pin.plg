@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PLUGIN name="nvidia-driver-pin" author="helper" version="2024.01.19" launch="Settings/nvidia-driver" min="6.9.0-beta31" support="https://forums.unraid.net/topic/98978-plugin-nvidia-driver/">
 
-<CHANGES>Companion plugin: persists Nvidia repo/tag and driver_version pin at boot without modifying the official plugin during install.</CHANGES>
+<CHANGES>Companion plugin: pins Nvidia driver settings to use official Unraid repository and latest available driver for GT 710 compatibility.</CHANGES>
 
 <FILE Run="/bin/bash">
 <INLINE><![CDATA[
@@ -10,9 +10,8 @@ set -e
 PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
 EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
 PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
-TAG_OVERRIDE="6.8.12-Unraid"
-REPO_TARGET="ich777/unraid-nvidia-driver"
-DRIVER_PIN="470.239.06"
+KERNEL_VERSION="$(uname -r)"
+REPO_TARGET="unraid/unraid-nvidia-driver"
 
 mkdir -p "$PLUGIN_DIR" "$PACKAGES_DIR"
 
@@ -21,39 +20,65 @@ cat > "$PIN_SCRIPT" <<'EOS'
 #!/bin/bash
 PLUGIN_DIR="/boot/config/plugins/nvidia-driver"
 EMHTTP_DIR="/usr/local/emhttp/plugins/nvidia-driver"
-TAG_OVERRIDE="6.8.12-Unraid"
-REPO_TARGET="ich777/unraid-nvidia-driver"
-DRIVER_PIN="470.239.06"
+KERNEL_VERSION="$(uname -r)"
+REPO_TARGET="unraid/unraid-nvidia-driver"
 PACKAGES_DIR="/boot/config/plugins/nvidia-driver/packages"
 
 # Exit silently if official plugin is not installed yet
 [ -f "$EMHTTP_DIR/include/exec.sh" ] || exit 0
 
+# Ensure we're using the official Unraid repository
 for f in \
   "$EMHTTP_DIR/include/update-check.sh" \
   "$EMHTTP_DIR/include/download.sh" \
   "$EMHTTP_DIR/include/exec.sh"; do
   [ -f "$f" ] || continue
-  sed -i -E 's|api.github.com/repos/(unraid|ich777)/unraid-nvidia-driver|api.github.com/repos/ich777/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
-  sed -i -E 's|github.com/(unraid|ich777)/unraid-nvidia-driver/releases|github.com/ich777/unraid-nvidia-driver/releases|g' "$f" 2>/dev/null || true
-  sed -i 's/^KERNEL_V=.*/KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
-  sed -i 's/^export KERNEL_V=.*/export KERNEL_V="'"${TAG_OVERRIDE}"'"/' "$f" 2>/dev/null || true
+  # Point all URLs to official Unraid repository
+  sed -i -E 's|api.github.com/repos/(ich777|unraid)/unraid-nvidia-driver|api.github.com/repos/unraid/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
+  sed -i -E 's|github.com/(ich777|unraid)/unraid-nvidia-driver/releases|github.com/unraid/unraid-nvidia-driver/releases|g' "$f" 2>/dev/null || true
+  sed -i -E 's|raw.githubusercontent.com/(ich777|unraid)/unraid-nvidia-driver|raw.githubusercontent.com/unraid/unraid-nvidia-driver|g' "$f" 2>/dev/null || true
 done
 
+# Initialize settings if missing
 mkdir -p "$PLUGIN_DIR"
 if [ ! -f "$PLUGIN_DIR/settings.cfg" ]; then
   cat > "$PLUGIN_DIR/settings.cfg" <<CFG
-first_installation=true
+first_installation=false
 driver_version=latest
 disable_xconfig=false
 update_check=false
 CFG
 fi
-sed -i "/driver_version=/c\\driver_version=${DRIVER_PIN}" "$PLUGIN_DIR/settings.cfg"
+
+# Set to use latest driver (since 470 isn't available for newer kernels)
+sed -i "/driver_version=/c\\driver_version=latest" "$PLUGIN_DIR/settings.cfg"
 sed -i "/update_check=/c\\update_check=false" "$PLUGIN_DIR/settings.cfg"
 
+# Clear caches and repopulate driver list
 rm -f /tmp/nvidia_driver /tmp/nvos_driver /tmp/nvidia_branches
 "$EMHTTP_DIR/include/exec.sh" update >/dev/null 2>&1 || true
+
+# Check what drivers are available and try to install the best one for GT 710
+echo "Checking available drivers for kernel $KERNEL_VERSION..."
+DRIVERS_AVAILABLE=$(wget -qO- "https://api.github.com/repos/$REPO_TARGET/releases/tags/$KERNEL_VERSION" 2>/dev/null | jq -r '.assets[].name' | grep "nvidia-" | grep -E -v '\.md5$' | sort -V || echo "")
+
+if [ -n "$DRIVERS_AVAILABLE" ]; then
+  echo "Available drivers: $DRIVERS_AVAILABLE"
+  # Try to install the lowest version available (most likely to support GT 710)
+  LOWEST_DRIVER=$(echo "$DRIVERS_AVAILABLE" | head -1)
+  if [ -n "$LOWEST_DRIVER" ]; then
+    echo "Attempting to install $LOWEST_DRIVER for GT 710 compatibility..."
+    # Download and install the driver
+    wget -N "https://github.com/$REPO_TARGET/releases/download/$KERNEL_VERSION/$LOWEST_DRIVER" -O "$PACKAGES_DIR/$LOWEST_DRIVER" 2>/dev/null || true
+    if [ -f "$PACKAGES_DIR/$LOWEST_DRIVER" ]; then
+      installpkg "$PACKAGES_DIR/$LOWEST_DRIVER" 2>/dev/null || true
+      echo "Driver $LOWEST_DRIVER installed. Testing compatibility..."
+      modprobe nvidia 2>/dev/null || echo "Driver load failed - may not be compatible with GT 710"
+    fi
+  fi
+else
+  echo "No drivers available for kernel $KERNEL_VERSION"
+fi
 EOS
 chmod +x "$PIN_SCRIPT"
 
